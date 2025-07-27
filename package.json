@@ -1,0 +1,27 @@
+{
+  "name": "@context1000/rag",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc && cp .env dist/",
+    "index": "tsx src/indexer.ts",
+    "mcp": "tsx src/mcp-server.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.15.1",
+    "@octokit/rest": "^20.0.2",
+    "@xenova/transformers": "^2.17.2",
+    "chromadb": "^1.8.1",
+    "dotenv": "^16.4.5",
+    "fs-extra": "^11.2.0",
+    "gray-matter": "^4.0.3",
+    "openai": "^4.104.0"
+  },
+  "devDependencies": {
+    "@types/fs-extra": "^11.0.4",
+    "@types/node": "^20.14.10",
+    "tsx": "^4.16.2",
+    "typescript": "^5.5.3"
+  }
+}
