@@ -26,7 +26,7 @@ export class QueryInterface {
     await this.chromaClient.initialize(collectionName, docsPath);
   }
 
-  async queryForCodeReview(
+  async queryDocs(
     query: string,
     options: {
       maxResults?: number;
@@ -66,40 +66,6 @@ export class QueryInterface {
         return true;
       });
   }
-
-  async getSecurityRules(): Promise<QueryResult[]> {
-    return this.queryForCodeReview("security rules guidelines", {
-      filterByType: ["rule"],
-      maxResults: 10,
-    });
-  }
-
-  async getOAuthGuidelines(): Promise<QueryResult[]> {
-    return this.queryForCodeReview("oauth authentication csrf security", {
-      filterByType: ["adr", "guide", "rule"],
-      maxResults: 10,
-    });
-  }
-
-  async getProjectSpecificRules(projectName: string): Promise<QueryResult[]> {
-    return this.queryForCodeReview("project guidelines rules standards", {
-      filterByProject: [projectName],
-      maxResults: 10,
-    });
-  }
-
-  async searchByKeywords(keywords: string[]): Promise<QueryResult[]> {
-    const query = keywords.join(" ");
-    return this.queryForCodeReview(query, {
-      maxResults: 10,
-    });
-  }
-
-  async getCriticalRules(): Promise<QueryResult[]> {
-    return this.queryForCodeReview("critical security requirements", {
-      maxResults: 10,
-    });
-  }
 }
 
 async function interactiveQuery() {
@@ -117,7 +83,7 @@ async function interactiveQuery() {
     const queryInterface = new QueryInterface();
     await queryInterface.initialize();
 
-    const results = await queryInterface.queryForCodeReview(query);
+    const results = await queryInterface.queryDocs(query);
 
     if (results.length === 0) {
       console.log("No relevant documents found.");

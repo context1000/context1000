@@ -68,7 +68,7 @@ async function getProjectByName(projectName: string) {
   const projectFile = path.join(projectPath, "project.md");
 
   if (!(await fs.pathExists(projectFile))) {
-    throw new Error(`Project not found: ${projectName} (${projectFile})`);
+    throw new Error(`Project not found: ${projectName}`);
   }
 
   const documents = await processDocsFromPath(projectPath);
@@ -135,12 +135,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               description:
                 "Filter results by document types: 'adr' (Architecture Decision Records), 'rfc' (Request for Comments), 'guide' (implementation guides), 'rule' (coding/project rules), 'project' (project overviews)",
             },
-            project_filter: {
-              type: "array",
-              items: { type: "string" },
-              description:
-                "Filter results to specific project directories (e.g., ['project1', 'litres-id']). Leave empty to search across all global and project-specific documentation.",
-            },
             max_results: {
               type: "number",
               description: "Maximum number of document chunks to return (default: 10, recommended range: 5-20)",
@@ -175,18 +169,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "search_documentation": {
-        const { query, type_filter, project_filter, max_results = 10 } = args as any;
+        const { query, type_filter, max_results = 10 } = args as any;
 
-        const rulesResults = await rag.queryForCodeReview("rules", {
+        const rulesResults = await rag.queryDocs("rules", {
           maxResults: 20,
           filterByType: ["rule"],
-          filterByProject: project_filter,
+          filterByProject: [projectName],
         });
 
-        const results = await rag.queryForCodeReview(query, {
+        const results = await rag.queryDocs(query, {
           maxResults: max_results,
           filterByType: type_filter,
-          filterByProject: project_filter,
+          filterByProject: [projectName],
         });
 
         const validatedResults = applyRulesValidation(results, rulesResults);
