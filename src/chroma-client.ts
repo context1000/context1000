@@ -1,6 +1,7 @@
 import "dotenv/config";
 
-import { ChromaClient as ChromaApi, OpenAIEmbeddingFunction, Collection } from "chromadb";
+import { ChromaClient as ChromaApi, Collection } from "chromadb";
+import { OpenAIEmbeddingFunction } from "@chroma-core/openai";
 import { ProcessedDocument, DocumentChunk, DocumentProcessor } from "./document-processor.js";
 
 export class ChromaClient {
@@ -14,8 +15,8 @@ export class ChromaClient {
     });
 
     this.embeddingFunction = new OpenAIEmbeddingFunction({
-      openai_api_key: process.env.OPENAI_API_KEY || "",
-      openai_model: "text-embedding-3-small",
+      apiKey: process.env.OPENAI_API_KEY || "",
+      modelName: "text-embedding-3-small",
     });
   }
 
@@ -115,7 +116,7 @@ export class ChromaClient {
     return {
       documents: (results.documents[0] || []).filter((doc): doc is string => doc !== null),
       metadatas: (results.metadatas[0] || []).filter((meta): meta is Record<string, any> => meta !== null),
-      distances: results.distances?.[0] || [],
+      distances: (results.distances?.[0] || []).filter((dist): dist is number => dist !== null),
     };
   }
 

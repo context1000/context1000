@@ -135,6 +135,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               description:
                 "Filter results by document types: 'adr' (Architecture Decision Records), 'rfc' (Request for Comments), 'guide' (implementation guides), 'rule' (coding/project rules), 'project' (project overviews)",
             },
+            project_filter: {
+              type: "array",
+              items: { type: "string" },
+              description:
+                "Filter results to specific project directories (e.g., ['project1', 'project2']). Leave empty to search across all global and project-specific documentation.",
+            },
+
             max_results: {
               type: "number",
               description: "Maximum number of document chunks to return (default: 10, recommended range: 5-20)",

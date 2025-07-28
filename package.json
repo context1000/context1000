@@ -5,18 +5,18 @@
   "type": "module",
   "scripts": {
     "build": "tsc && cp .env dist/",
-    "index": "tsx src/indexer.ts",
-    "mcp": "tsx src/mcp-server.ts"
+    "index": "tsx src/indexer.ts"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.15.1",
+    "@chroma-core/openai": "^0.1.7",
+    "@modelcontextprotocol/sdk": "^1.17.0",
     "@octokit/rest": "^20.0.2",
     "@xenova/transformers": "^2.17.2",
-    "chromadb": "^1.8.1",
-    "dotenv": "^16.4.5",
-    "fs-extra": "^11.2.0",
+    "chromadb": "^3.0.10",
+    "dotenv": "^17.2.1",
+    "fs-extra": "^11.3.0",
     "gray-matter": "^4.0.3",
-    "openai": "^4.104.0"
+    "openai": "^5.10.2"
   },
   "devDependencies": {
     "@types/fs-extra": "^11.0.4",
