@@ -72,7 +72,7 @@ async function getProjectByName(projectName: string) {
   }
 
   const documents = await processDocsFromPath(projectPath);
-  return documents.find((doc) => doc.metadata.filePath.endsWith("project.md"));
+  return documents;
 }
 
 async function loadProjectConfig(projectName: string): Promise<any> {
@@ -92,11 +92,10 @@ async function loadProjectConfig(projectName: string): Promise<any> {
 
 async function initializeRAG() {
   if (!queryInterface) {
-    projectConfig = await loadProjectConfig(projectName);
-    console.error(`Loaded project config for: ${projectConfig.name}`);
+    console.error(`Initializing global RAG for context1000`);
 
     queryInterface = new QueryInterface();
-    await queryInterface.initialize(`context1000-${projectName}`, projectConfig.docsPath);
+    await queryInterface.initialize(`context1000-global`, GLOBAL_DOCS_PATH);
   }
   return queryInterface;
 }
@@ -107,17 +106,23 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: "get_project_info_by_name",
         description:
-          "Retrieve detailed project information from the context1000 documentation repository. Returns project metadata including title, tags, repository URL, and related documents (ADRs, RFCs, guides, rules). Projects are stored in docs/projects/ with their own local documentation structure including decisions, guides, and rules.",
+          "Retrieve all files and documentation for a specific project from the context1000 documentation repository. Returns all project files including project.md, stack.md, ADRs, RFCs, guides, and rules within the project directory.",
         inputSchema: {
           type: "object",
-          properties: {},
-          required: [],
+          properties: {
+            project_name: {
+              type: "string",
+              description:
+                "Name of the project to retrieve information for (e.g., 'litres-id', 'litres-corp-frontend')",
+            },
+          },
+          required: ["project_name"],
         },
       },
       {
         name: "search_documentation",
         description:
-          "Search through context1000 documentation repository for architectural decisions, technical guidance, implementation rules, and development guides. The search covers global and project-specific documentation including ADRs (Architecture Decision Records), RFCs (Request for Comments), implementation guides, coding rules, and project documentation. Results include document chunks with section-aware context and cross-references between related documents.",
+          "Search through global context1000 documentation repository (excluding project-specific directories). Searches through global ADRs, RFCs, guides, and rules for architectural decisions, technical guidance, and development standards that apply across all projects.",
         inputSchema: {
           type: "object",
           properties: {
@@ -134,12 +139,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               },
               description:
                 "Filter results by document types: 'adr' (Architecture Decision Records), 'rfc' (Request for Comments), 'guide' (implementation guides), 'rule' (coding/project rules), 'project' (project overviews)",
-            },
-            project_filter: {
-              type: "array",
-              items: { type: "string" },
-              description:
-                "Filter results to specific project directories (e.g., ['project1', 'project2']). Leave empty to search across all global and project-specific documentation.",
             },
 
             max_results: {
@@ -164,7 +163,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     switch (name) {
       case "get_project_info_by_name": {
-        const project = await getProjectByName(projectName);
+        const { project_name } = args as any;
+        const project = await getProjectByName(project_name);
         return {
           content: [
             {
@@ -178,25 +178,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case "search_documentation": {
         const { query, type_filter, max_results = 10 } = args as any;
 
-        const rulesResults = await rag.queryDocs("rules", {
-          maxResults: 20,
-          filterByType: ["rule"],
-          filterByProject: [projectName],
-        });
-
         const results = await rag.queryDocs(query, {
           maxResults: max_results,
           filterByType: type_filter,
-          filterByProject: [projectName],
         });
-
-        const validatedResults = applyRulesValidation(results, rulesResults);
 
         return {
           content: [
             {
               type: "text",
-              text: JSON.stringify(validatedResults, null, 2),
+              text: JSON.stringify(results, null, 2),
             },
           ],
         };
