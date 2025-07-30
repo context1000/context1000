@@ -30,33 +30,7 @@ const server = new Server(
 );
 
 let queryInterface: QueryInterface | null = null;
-let projectConfig: any = null;
 const GLOBAL_DOCS_PATH = "/Users/ivankalagin/dev/context1000/litres-docs/docs";
-
-function applyRulesValidation(results: any[], rulesResults: any[]): any {
-  const rules = rulesResults.map((r) => r.content).join("\n");
-
-  const useRules = extractRulesPattern(rules, /должен использовать|нужно использовать|использовать/gi);
-  const avoidRules = extractRulesPattern(rules, /не использовать|запрещено|избегать/gi);
-
-  return {
-    results: results,
-    rulesApplied: {
-      use: useRules,
-      avoid: avoidRules,
-      rulesChecked: rulesResults.length > 0,
-    },
-  };
-}
-
-function extractRulesPattern(text: string, pattern: RegExp): string[] {
-  const matches = text.match(pattern);
-  if (!matches) return [];
-
-  const lines = text.split("\n");
-  const ruleLines = lines.filter((line) => pattern.test(line));
-  return ruleLines.slice(0, 10);
-}
 
 async function processDocsFromPath(docsPath: string) {
   const processor = new DocumentProcessor();
@@ -73,21 +47,6 @@ async function getProjectByName(projectName: string) {
 
   const documents = await processDocsFromPath(projectPath);
   return documents;
-}
-
-async function loadProjectConfig(projectName: string): Promise<any> {
-  const projectPath = path.join(GLOBAL_DOCS_PATH, "projects", projectName);
-  const projectFile = path.join(projectPath, "project.md");
-
-  if (!(await fs.pathExists(projectFile))) {
-    throw new Error(`Project configuration not found at ${projectFile}`);
-  }
-
-  return {
-    name: projectName,
-    path: projectPath,
-    docsPath: path.join(projectPath),
-  };
 }
 
 async function initializeRAG() {
