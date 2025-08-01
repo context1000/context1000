@@ -1,18 +1,29 @@
-# @context1000/rag
+# context1000
 
-## Quick Start
+## Prepare and index your documentation
 
-**Install dependencies**:
+### Create documentation
+
+Use special docs template from: <https://github.com/context1000/docs>.
 
 ```bash
-npm install
+git clone https://github.com/context1000/docs my-cool-docs
 ```
 
-**Set up environment**:
+on your local machine in /path/to/my-cool-docs create documentation for your projects in `docs` directory. (see README <https://github.com/context1000/docs>)
+
+### Install context1000
 
 ```bash
-cp .env.example .env
-# Edit .env with your OpenAI API key and ChromaDB URL
+npm i -G context1000
+```
+
+### Set up environment
+
+```bash
+touch .env
+echo "CHROMA_URL=http://localhost:8000" >> .env
+echo "OPENAI_API_KEY=your-key" >> .env
 ```
 
 **Start ChromaDB** (if running locally):
@@ -24,16 +35,18 @@ docker run -p 8000:8000 chromadb/chroma
 **Index your documentation**:
 
 ```bash
-npm run index </path/to/docs>
+npx context1000 index /path/to/docs
 ```
 
-## MCP Server
+## Use your documentation with MCP
 
-### Claude code
+### Claude Code
+
+In your target project run:
 
 ```bash
 claude mcp add context1000 \
   -e OPENAI_API_KEY=your-key \
   -e CHROMA_URL=http://localhost:8000 \
-  -- node /path/to/rag/dist/mcp-server.js project-name /path/to/docs
+  -- npx context1000 mcp <project-name>
 ```
