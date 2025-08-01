@@ -26,13 +26,13 @@ echo "CHROMA_URL=http://localhost:8000" >> .env
 echo "OPENAI_API_KEY=your-key" >> .env
 ```
 
-**Start ChromaDB** (if running locally):
+### Start ChromaDB
 
 ```bash
 docker run -p 8000:8000 chromadb/chroma
 ```
 
-**Index your documentation**:
+### Index your documentation
 
 ```bash
 npx context1000 index /path/to/docs
