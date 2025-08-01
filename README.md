@@ -35,5 +35,5 @@ npm run index </path/to/docs>
 claude mcp add context1000 \
   -e OPENAI_API_KEY=your-key \
   -e CHROMA_URL=http://localhost:8000 \
-  -- node /path/to/rag/dist/mcp-server.js project-name
+  -- node /path/to/rag/dist/mcp-server.js project-name /path/to/docs
 ```

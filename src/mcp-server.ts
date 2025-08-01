@@ -11,9 +11,11 @@ import path from "path";
 import fs from "fs-extra";
 
 const projectName = process.argv[2];
-if (!projectName) {
-  console.error("Usage: node mcp-server.js <project-name>");
-  console.error("Example: node mcp-server.js litres-id");
+const docsPath = process.argv[3];
+
+if (!projectName || !docsPath) {
+  console.error("Usage: node mcp-server.js <project-name> <docs-path>");
+  console.error("Example: node mcp-server.js litres-id /path/to/docs");
   process.exit(1);
 }
 
@@ -30,7 +32,6 @@ const server = new Server(
 );
 
 let queryInterface: QueryInterface | null = null;
-const GLOBAL_DOCS_PATH = "/Users/ivankalagin/dev/context1000/litres-docs/docs";
 
 async function processDocsFromPath(docsPath: string) {
   const processor = new DocumentProcessor();
@@ -38,7 +39,7 @@ async function processDocsFromPath(docsPath: string) {
 }
 
 async function getProjectByName(projectName: string) {
-  const projectPath = path.join(GLOBAL_DOCS_PATH, "projects", projectName);
+  const projectPath = path.join(docsPath, "projects", projectName);
   const projectFile = path.join(projectPath, "project.md");
 
   if (!(await fs.pathExists(projectFile))) {
@@ -54,7 +55,7 @@ async function initializeRAG() {
     console.error(`Initializing global RAG for context1000`);
 
     queryInterface = new QueryInterface();
-    await queryInterface.initialize(`context1000-global`, GLOBAL_DOCS_PATH);
+    await queryInterface.initialize(`context1000-global`, docsPath);
   }
   return queryInterface;
 }
