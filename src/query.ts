@@ -32,10 +32,9 @@ export class QueryInterface {
       maxResults?: number;
       filterByType?: string[];
       filterByProject?: string[];
-      includeRelated?: boolean;
     } = {}
   ): Promise<QueryResult[]> {
-    const { maxResults = 5, filterByType, filterByProject, includeRelated = true } = options;
+    const { maxResults = 5, filterByType, filterByProject } = options;
 
     const filters: Record<string, any> = {};
 
@@ -43,27 +42,24 @@ export class QueryInterface {
       filters.type = { $in: filterByType };
     }
 
+    if (filterByProject && filterByProject.length > 0) {
+      filters.projects = { $in: filterByProject };
+    }
+
     const whereClause = Object.keys(filters).length > 0 ? filters : undefined;
     const results = await this.chromaClient.queryDocuments(query, maxResults, whereClause);
 
-    return results.documents
-      .map((doc, index) => ({
-        document: doc,
-        metadata: {
-          title: results.metadatas[index].title,
-          type: results.metadatas[index].type,
-          filePath: results.metadatas[index].filePath,
-          tags: JSON.parse(results.metadatas[index].tags || "[]"),
-          projects: JSON.parse(results.metadatas[index].projects || "[]"),
-          status: results.metadatas[index].status,
-        },
-        relevanceScore: 1 - (results.distances[index] || 0),
-      }))
-      .filter((result) => {
-        if (filterByProject && filterByProject.length > 0) {
-          return result.metadata.projects.some((project: string) => filterByProject.includes(project));
-        }
-        return true;
-      });
+    return results.documents.map((doc, index) => ({
+      document: doc,
+      metadata: {
+        title: results.metadatas[index].title,
+        type: results.metadatas[index].type,
+        filePath: results.metadatas[index].filePath,
+        tags: JSON.parse(results.metadatas[index].tags || "[]"),
+        projects: JSON.parse(results.metadatas[index].projects || "[]"),
+        status: results.metadatas[index].status,
+      },
+      relevanceScore: 1 - (results.distances[index] || 0),
+    }));
   }
 }

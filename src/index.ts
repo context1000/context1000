@@ -83,7 +83,7 @@ program
       const server = new Server(
         {
           name: "context1000",
-          version: "1.0.0",
+          version: packageJson.version,
         },
         {
           capabilities: {
@@ -99,7 +99,7 @@ program
           console.error(`Initializing global RAG for context1000`);
 
           queryInterface = new QueryInterface();
-          await queryInterface.initialize(`context1000-global`);
+          await queryInterface.initialize(`context1000`);
         }
         return queryInterface;
       }
@@ -108,24 +108,9 @@ program
         return {
           tools: [
             {
-              name: "get_project_info_by_name",
-              description:
-                "Retrieve all files and documentation for a specific project from the context1000 documentation repository. Returns all project files including project.md, stack.md, ADRs, RFCs, guides, and rules within the project directory.",
-              inputSchema: {
-                type: "object",
-                properties: {
-                  project_name: {
-                    type: "string",
-                    description: "Name of the project to retrieve information for (e.g., 'project1', 'project2')",
-                  },
-                },
-                required: ["project_name"],
-              },
-            },
-            {
               name: "search_documentation",
               description:
-                "Search through global context1000 documentation repository (excluding project-specific directories). Searches through global ADRs, RFCs, guides, and rules for architectural decisions, technical guidance, and development standards that apply across all projects.",
+                "Search through context1000 documentation repository. Can search globally or within specific projects. Searches through ADRs, RFCs, guides, rules, and project-specific documentation.",
               inputSchema: {
                 type: "object",
                 properties: {
@@ -133,6 +118,10 @@ program
                     type: "string",
                     description:
                       "Natural language search query for finding relevant documentation (e.g., 'authentication patterns', 'database migration rules', 'testing guidelines')",
+                  },
+                  project: {
+                    type: "string",
+                    description: "Optional project name to search within specific project documentation (e.g., 'project1', 'project2'). If not provided, searches globally.",
                   },
                   type_filter: {
                     type: "array",
@@ -143,7 +132,6 @@ program
                     description:
                       "Filter results by document types: 'adr' (Architecture Decision Records), 'rfc' (Request for Comments), 'guide' (implementation guides), 'rule' (coding/project rules), 'project' (project overviews)",
                   },
-
                   max_results: {
                     type: "number",
                     description: "Maximum number of document chunks to return (default: 10, recommended range: 5-20)",
@@ -165,29 +153,23 @@ program
           const rag = await initializeRAG();
 
           switch (name) {
-            case "get_project_info_by_name": {
-              const results = await rag.queryDocs(`project ${projectName}`, {
-                maxResults: 50,
-                filterByProject: [projectName],
-              });
-
-              return {
-                content: [
-                  {
-                    type: "text",
-                    text: JSON.stringify(results, null, 2),
-                  },
-                ],
-              };
-            }
-
             case "search_documentation": {
-              const { query, type_filter, max_results = 10 } = args as any;
+              const { query, project, type_filter, max_results = 10 } = args as any;
 
-              const results = await rag.queryDocs(query, {
+              if (!query) {
+                throw new McpError(ErrorCode.InvalidParams, "query is required");
+              }
+
+              const options: any = {
                 maxResults: max_results,
                 filterByType: type_filter,
-              });
+              };
+
+              if (project) {
+                options.filterByProject = [project];
+              }
+
+              const results = await rag.queryDocs(query, options);
 
               return {
                 content: [
