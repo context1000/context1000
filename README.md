@@ -15,7 +15,7 @@ on your local machine in /path/to/my-cool-docs create documentation for your pro
 ### Install context1000
 
 ```bash
-npm i -G context1000
+npm i context1000 -g
 ```
 
 ### Set up environment
