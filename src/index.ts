@@ -5,10 +5,11 @@ import { Command } from "commander";
 import path from "path";
 import { DocumentProcessor } from "./document-processor.js";
 import { ChromaClient } from "./chroma-client.js";
+import packageJson from "../package.json";
 
 const program = new Command();
 
-program.name("context1000").description("CLI for context1000 RAG system").version("0.0.1");
+program.name("context1000").description("CLI for context1000 RAG system").version(packageJson.version);
 
 program
   .command("index")
