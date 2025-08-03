@@ -70,8 +70,7 @@ program
 program
   .command("mcp")
   .description("Start MCP server")
-  .argument("<project-name>", "Name of the project")
-  .action(async (projectName: string) => {
+  .action(async () => {
     try {
       const { Server } = await import("@modelcontextprotocol/sdk/server/index.js");
       const { StdioServerTransport } = await import("@modelcontextprotocol/sdk/server/stdio.js");
@@ -121,7 +120,8 @@ program
                   },
                   project: {
                     type: "string",
-                    description: "Optional project name to search within specific project documentation (e.g., 'project1', 'project2'). If not provided, searches globally.",
+                    description:
+                      "Optional project name to search within specific project documentation (e.g., 'project1', 'project2'). If not provided, searches globally.",
                   },
                   type_filter: {
                     type: "array",

@@ -42,11 +42,12 @@ npx context1000 index /path/to/docs
 
 ### Claude Code
 
-In your target project run:
+
+#### Add locally
 
 ```bash
 claude mcp add context1000 \
   -e OPENAI_API_KEY=your-key \
   -e CHROMA_URL=http://localhost:8000 \
-  -- npx context1000 mcp <project-name>
+  -- npx context1000 mcp
 ```
