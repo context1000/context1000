@@ -6,8 +6,40 @@ import path from "path";
 import { DocumentProcessor } from "./document-processor.js";
 import { ChromaClient } from "./chroma-client.js";
 import packageJson from "../package.json";
+import { createServer } from "http";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
+import { IncomingMessage } from "http";
 
 const program = new Command();
+
+const sseTransports: Record<string, SSEServerTransport> = {};
+
+function getClientIp(req: IncomingMessage): string | undefined {
+  const forwardedFor = req.headers["x-forwarded-for"] || req.headers["X-Forwarded-For"];
+
+  if (forwardedFor) {
+    const ips = Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor;
+    const ipList = ips.split(",").map((ip) => ip.trim());
+
+    for (const ip of ipList) {
+      const plainIp = ip.replace(/^::ffff:/, "");
+      if (
+        !plainIp.startsWith("10.") &&
+        !plainIp.startsWith("192.168.") &&
+        !/^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(plainIp)
+      ) {
+        return plainIp;
+      }
+    }
+    return ipList[0].replace(/^::ffff:/, "");
+  }
+
+  if (req.socket?.remoteAddress) {
+    return req.socket.remoteAddress.replace(/^::ffff:/, "");
+  }
+  return undefined;
+}
 
 program.name("context1000").description("CLI for context1000 RAG system").version(packageJson.version);
 
@@ -70,8 +102,8 @@ program
 program
   .command("mcp")
   .description("Start MCP server")
-  .option("--transport <stdio|http>", "transport type", "stdio")
-  .option("--port <number>", "port for HTTP transport", "3000")
+  .option("--transport <stdio|http|sse>", "transport type", "stdio")
+  .option("--port <number>", "port for HTTP/SSE transport", "3000")
   .action(async (options) => {
     try {
       const { Server } = await import("@modelcontextprotocol/sdk/server/index.js");
@@ -83,6 +115,12 @@ program
 
       const transport = options.transport || "stdio";
       const port = parseInt(options.port) || 3000;
+
+      const allowedTransports = ["stdio", "http", "sse"];
+      if (!allowedTransports.includes(transport)) {
+        console.error(`Invalid --transport value: '${transport}'. Must be one of: stdio, http, sse.`);
+        process.exit(1);
+      }
 
       const server = new Server(
         {
@@ -100,10 +138,10 @@ program
 
       async function initializeRAG() {
         if (!queryInterface) {
-          console.error(`Initializing global RAG for context1000`);
+          console.error("Initializing global RAG for context1000");
 
           queryInterface = new QueryInterface();
-          await queryInterface.initialize(`context1000`);
+          await queryInterface.initialize("context1000");
         }
         return queryInterface;
       }
@@ -198,17 +236,19 @@ program
         const stderrTransport = new StdioServerTransport();
         await server.connect(stderrTransport);
         console.error("context1000 RAG MCP server running on stdio");
-      } else if (transport === "http") {
-        const http = await import("http");
-        const url = await import("url");
+      } else if (transport === "http" || transport === "sse") {
+        const initialPort = port;
+        let actualPort = initialPort;
+        const httpServer = createServer(async (req, res) => {
+          const url = new URL(req.url || "", `http://${req.headers.host}`).pathname;
 
-        const httpServer = http.createServer(async (req, res) => {
-          const parsedUrl = url.parse(req.url || "", true);
-
-          // CORS headers
           res.setHeader("Access-Control-Allow-Origin", "*");
-          res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-          res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+          res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS,DELETE");
+          res.setHeader(
+            "Access-Control-Allow-Headers",
+            "Content-Type, MCP-Session-Id, mcp-session-id, MCP-Protocol-Version"
+          );
+          res.setHeader("Access-Control-Expose-Headers", "MCP-Session-Id");
 
           if (req.method === "OPTIONS") {
             res.writeHead(200);
@@ -216,35 +256,58 @@ program
             return;
           }
 
-          if (parsedUrl.pathname === "/mcp" && req.method === "POST") {
-            let body = "";
-            req.on("data", (chunk) => {
-              body += chunk.toString();
-            });
+          try {
+            const clientIp = getClientIp(req);
 
-            req.on("end", async () => {
-              try {
-                const request = JSON.parse(body);
-                const response = await server.request(request);
-                res.writeHead(200, { "Content-Type": "application/json" });
-                res.end(JSON.stringify(response));
-              } catch (error) {
-                res.writeHead(500, { "Content-Type": "application/json" });
-                res.end(JSON.stringify({ error: "Internal server error" }));
+            if (url === "/mcp") {
+              const transport = new StreamableHTTPServerTransport({
+                sessionIdGenerator: undefined,
+              });
+              await server.connect(transport);
+              await transport.handleRequest(req, res);
+            } else if (url === "/sse" && req.method === "GET") {
+              const sseTransport = new SSEServerTransport("/messages", res);
+              sseTransports[sseTransport.sessionId] = sseTransport;
+              res.on("close", () => {
+                delete sseTransports[sseTransport.sessionId];
+              });
+              await server.connect(sseTransport);
+            } else if (url === "/messages" && req.method === "POST") {
+              const sessionId = new URL(req.url || "", `http://${req.headers.host}`).searchParams.get("sessionId") ?? "";
+
+              if (!sessionId) {
+                res.writeHead(400);
+                res.end("Missing sessionId parameter");
+                return;
               }
-            });
-          } else if (parsedUrl.pathname === "/ping") {
-            res.writeHead(200, { "Content-Type": "application/json" });
-            res.end(JSON.stringify({ status: "ok", server: "context1000" }));
-          } else {
-            res.writeHead(404, { "Content-Type": "application/json" });
-            res.end(JSON.stringify({ error: "Not found" }));
+
+              const sseTransport = sseTransports[sessionId];
+              if (!sseTransport) {
+                res.writeHead(400);
+                res.end(`No transport found for sessionId: ${sessionId}`);
+                return;
+              }
+
+              await sseTransport.handlePostMessage(req, res);
+            } else if (url === "/ping") {
+              res.writeHead(200, { "Content-Type": "text/plain" });
+              res.end("pong");
+            } else {
+              res.writeHead(404);
+              res.end("Not found");
+            }
+          } catch (error) {
+            console.error("Error handling request:", error);
+            if (!res.headersSent) {
+              res.writeHead(500);
+              res.end("Internal Server Error");
+            }
           }
         });
 
         const startServer = (currentPort: number, maxAttempts = 10) => {
           httpServer.once("error", (err: NodeJS.ErrnoException) => {
-            if (err.code === "EADDRINUSE" && currentPort < port + maxAttempts) {
+            if (err.code === "EADDRINUSE" && currentPort < initialPort + maxAttempts) {
               console.warn(`Port ${currentPort} is in use, trying port ${currentPort + 1}...`);
               startServer(currentPort + 1, maxAttempts);
             } else {
@@ -254,11 +317,14 @@ program
           });
 
           httpServer.listen(currentPort, () => {
-            console.error(`context1000 RAG MCP server running on http://localhost:${currentPort}/mcp`);
+            actualPort = currentPort;
+            console.error(
+              `context1000 RAG MCP Server running on ${transport.toUpperCase()} at http://localhost:${actualPort}/mcp and legacy SSE at /sse`
+            );
           });
         };
 
-        startServer(port);
+        startServer(initialPort);
       } else {
         throw new Error(`Unsupported transport: ${transport}`);
       }
