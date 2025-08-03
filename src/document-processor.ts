@@ -102,13 +102,13 @@ export class DocumentProcessor {
     const id = this.generateDocumentId(filePath);
 
     const baseMetadata = {
-      title: frontmatter.title || frontmatter.name || path.basename(filePath, ".md"),
+      title: this.extractTitle(frontmatter, filePath),
       type,
-      tags: frontmatter.tags || [],
-      projects: (frontmatter.related?.projects || []),
-      status: frontmatter.status,
+      tags: Array.isArray(frontmatter.tags) ? frontmatter.tags : [],
+      projects: this.extractProjectsArray(frontmatter, filePath),
+      status: this.validateStatus(frontmatter.status, type),
       filePath: filePath,
-      related: frontmatter.related || {},
+      related: this.validateRelatedMetadata(frontmatter.related || {}),
     };
 
     const chunks = this.createDocumentChunks(id, markdownContent.trim(), baseMetadata);
@@ -254,19 +254,80 @@ export class DocumentProcessor {
 
   private inferDocumentType(filePath: string, _frontmatter: any): ProcessedDocument["metadata"]["type"] {
     const fileName = path.basename(filePath);
-    
+    const normalizedPath = filePath.replace(/\\/g, "/");
+
     if (fileName.endsWith(".adr.md")) return "adr";
     if (fileName.endsWith(".rfc.md")) return "rfc";
     if (fileName.endsWith(".guide.md")) return "guide";
     if (fileName.endsWith(".rules.md")) return "rule";
-    
-    if (filePath.includes("/adr/")) return "adr";
-    if (filePath.includes("/rfc/")) return "rfc";
-    if (filePath.includes("/guides/")) return "guide";
-    if (filePath.includes("/rules/")) return "rule";
-    if (filePath.includes("/projects/")) return "project";
-    
+
+    if (normalizedPath.match(/\/decisions\/adr\//)) return "adr";
+    if (normalizedPath.match(/\/decisions\/rfc\//)) return "rfc";
+    if (normalizedPath.match(/\/guides\//)) return "guide";
+    if (normalizedPath.match(/\/rules\//)) return "rule";
+
+    if (fileName === "project.md" && normalizedPath.includes("/projects/")) return "project";
+
+    if (normalizedPath.match(/\/projects\/[^\/]+\/[^\/]*\.md$/)) return "project";
+
     return "guide";
+  }
+
+  private extractProjectsArray(frontmatter: any, filePath: string): string[] {
+    if (frontmatter.related?.projects && Array.isArray(frontmatter.related.projects)) {
+      return frontmatter.related.projects;
+    }
+
+    const projectMatch = filePath.match(/\/projects\/([^\/]+)/);
+    if (projectMatch) {
+      return [projectMatch[1]];
+    }
+
+    return [];
+  }
+
+  private validateRelatedMetadata(related: any): any {
+    const validatedRelated: any = {};
+
+    const allowedKeys = ["adrs", "rfcs", "guides", "rules", "projects"];
+    for (const key of allowedKeys) {
+      if (related[key] && Array.isArray(related[key])) {
+        validatedRelated[key] = related[key];
+      }
+    }
+
+    return validatedRelated;
+  }
+
+  private extractTitle(frontmatter: any, filePath: string): string {
+    if (frontmatter.title && typeof frontmatter.title === "string") {
+      return frontmatter.title;
+    }
+    if (frontmatter.name && typeof frontmatter.name === "string") {
+      return frontmatter.name;
+    }
+    return path.basename(filePath, ".md");
+  }
+
+  private validateStatus(status: any, type: ProcessedDocument["metadata"]["type"]): string | undefined {
+    if (!status || typeof status !== "string") {
+      return undefined;
+    }
+
+    const validStatuses: Record<string, string[]> = {
+      adr: ["draft", "accepted", "rejected"],
+      rfc: ["draft", "accepted", "rejected"],
+      guide: [],
+      rule: [],
+      project: ["active", "inactive", "archived"],
+    };
+
+    const allowedStatuses = validStatuses[type] || [];
+    if (allowedStatuses.length === 0) {
+      return status;
+    }
+
+    return allowedStatuses.includes(status) ? status : undefined;
   }
 
   private generateDocumentId(filePath: string): string {
