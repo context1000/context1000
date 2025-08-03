@@ -70,7 +70,9 @@ program
 program
   .command("mcp")
   .description("Start MCP server")
-  .action(async () => {
+  .option("--transport <stdio|http>", "transport type", "stdio")
+  .option("--port <number>", "port for HTTP transport", "3000")
+  .action(async (options) => {
     try {
       const { Server } = await import("@modelcontextprotocol/sdk/server/index.js");
       const { StdioServerTransport } = await import("@modelcontextprotocol/sdk/server/stdio.js");
@@ -78,6 +80,9 @@ program
         "@modelcontextprotocol/sdk/types.js"
       );
       const { QueryInterface } = await import("./query.js");
+
+      const transport = options.transport || "stdio";
+      const port = parseInt(options.port) || 3000;
 
       const server = new Server(
         {
@@ -189,9 +194,74 @@ program
         }
       });
 
-      const transport = new StdioServerTransport();
-      await server.connect(transport);
-      console.error("context1000 RAG MCP server running on stdio");
+      if (transport === "stdio") {
+        const stderrTransport = new StdioServerTransport();
+        await server.connect(stderrTransport);
+        console.error("context1000 RAG MCP server running on stdio");
+      } else if (transport === "http") {
+        const http = await import("http");
+        const url = await import("url");
+
+        const httpServer = http.createServer(async (req, res) => {
+          const parsedUrl = url.parse(req.url || "", true);
+
+          // CORS headers
+          res.setHeader("Access-Control-Allow-Origin", "*");
+          res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+          res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+          if (req.method === "OPTIONS") {
+            res.writeHead(200);
+            res.end();
+            return;
+          }
+
+          if (parsedUrl.pathname === "/mcp" && req.method === "POST") {
+            let body = "";
+            req.on("data", (chunk) => {
+              body += chunk.toString();
+            });
+
+            req.on("end", async () => {
+              try {
+                const request = JSON.parse(body);
+                const response = await server.request(request);
+                res.writeHead(200, { "Content-Type": "application/json" });
+                res.end(JSON.stringify(response));
+              } catch (error) {
+                res.writeHead(500, { "Content-Type": "application/json" });
+                res.end(JSON.stringify({ error: "Internal server error" }));
+              }
+            });
+          } else if (parsedUrl.pathname === "/ping") {
+            res.writeHead(200, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ status: "ok", server: "context1000" }));
+          } else {
+            res.writeHead(404, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "Not found" }));
+          }
+        });
+
+        const startServer = (currentPort: number, maxAttempts = 10) => {
+          httpServer.once("error", (err: NodeJS.ErrnoException) => {
+            if (err.code === "EADDRINUSE" && currentPort < port + maxAttempts) {
+              console.warn(`Port ${currentPort} is in use, trying port ${currentPort + 1}...`);
+              startServer(currentPort + 1, maxAttempts);
+            } else {
+              console.error(`Failed to start server: ${err.message}`);
+              process.exit(1);
+            }
+          });
+
+          httpServer.listen(currentPort, () => {
+            console.error(`context1000 RAG MCP server running on http://localhost:${currentPort}/mcp`);
+          });
+        };
+
+        startServer(port);
+      } else {
+        throw new Error(`Unsupported transport: ${transport}`);
+      }
     } catch (error) {
       console.error("Failed to run MCP server:", error);
       process.exit(1);
