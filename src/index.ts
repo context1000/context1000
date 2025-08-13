@@ -5,6 +5,7 @@ import { Command } from "commander";
 import path from "path";
 import { DocumentProcessor } from "./document-processor.js";
 import { ChromaClient } from "./chroma-client.js";
+import { QueryResult } from "./query.js";
 import packageJson from "../package.json";
 import { createServer } from "http";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -14,7 +15,6 @@ import { IncomingMessage } from "http";
 const program = new Command();
 
 const sseTransports: Record<string, SSEServerTransport> = {};
-
 
 program.name("context1000").description("CLI for context1000 RAG system").version(packageJson.version);
 
@@ -125,21 +125,101 @@ program
         return {
           tools: [
             {
-              name: "search_documentation",
+              name: "check_project_rules",
               description:
-                "Search through context1000 documentation repository. Can search globally or within specific projects. Searches through ADRs, RFCs, guides, rules, and project-specific documentation.",
+                "Check project rules and constraints. Should be called FIRST when working on any project task. Returns project-specific rules, coding standards, constraints, and requirements that must be followed.",
+              inputSchema: {
+                type: "object",
+                properties: {
+                  project: {
+                    type: "string",
+                    description: "Project name to check rules for. If not provided, searches for general rules.",
+                  },
+                  max_results: {
+                    type: "number",
+                    description: "Maximum number of rule chunks to return (default: 15)",
+                    minimum: 1,
+                    maximum: 30,
+                  },
+                },
+                required: [],
+              },
+            },
+            {
+              name: "check_guides",
+              description:
+                "Check implementation guides and best practices. Should be called AFTER check_project_rules when specific implementation guidance is needed. Returns step-by-step guides, patterns, and examples.",
               inputSchema: {
                 type: "object",
                 properties: {
                   query: {
                     type: "string",
                     description:
-                      "Natural language search query for finding relevant documentation (e.g., 'authentication patterns', 'database migration rules', 'testing guidelines')",
+                      "Specific guidance needed (e.g., 'authentication implementation', 'testing patterns', 'deployment process')",
                   },
                   project: {
                     type: "string",
-                    description:
-                      "Optional project name to search within specific project documentation (e.g., 'project1', 'project2'). If not provided, searches globally.",
+                    description: "Project name for project-specific guides",
+                  },
+                  related_rules: {
+                    type: "array",
+                    items: { type: "string" },
+                    description: "Rule references found from check_project_rules to find related guides",
+                  },
+                  max_results: {
+                    type: "number",
+                    description: "Maximum number of guide chunks to return (default: 10)",
+                    minimum: 1,
+                    maximum: 25,
+                  },
+                },
+                required: ["query"],
+              },
+            },
+            {
+              name: "search_decisions",
+              description:
+                "Search through architectural decisions (ADRs) and RFCs. Triggered automatically when rules or guides reference specific decisions. Returns decision context, rationale, and implications.",
+              inputSchema: {
+                type: "object",
+                properties: {
+                  query: {
+                    type: "string",
+                    description: "Decision or RFC topic to search for",
+                  },
+                  references: {
+                    type: "array",
+                    items: { type: "string" },
+                    description: "Decision references found in rules or guides (e.g., 'ADR-001', 'RFC-123')",
+                  },
+                  project: {
+                    type: "string",
+                    description: "Project context for project-specific decisions",
+                  },
+                  max_results: {
+                    type: "number",
+                    description: "Maximum number of decision chunks to return (default: 8)",
+                    minimum: 1,
+                    maximum: 20,
+                  },
+                },
+                required: ["query"],
+              },
+            },
+            {
+              name: "search_documentation",
+              description:
+                "Fallback general documentation search. Use when specific tools (check_project_rules, check_guides, search_decisions) don't provide sufficient information. Searches across all document types.",
+              inputSchema: {
+                type: "object",
+                properties: {
+                  query: {
+                    type: "string",
+                    description: "Natural language search query for finding relevant documentation",
+                  },
+                  project: {
+                    type: "string",
+                    description: "Optional project name to search within specific project documentation",
                   },
                   type_filter: {
                     type: "array",
@@ -147,12 +227,11 @@ program
                       type: "string",
                       enum: ["adr", "rfc", "guide", "rule", "project"],
                     },
-                    description:
-                      "Filter results by document types: 'adr' (Architecture Decision Records), 'rfc' (Request for Comments), 'guide' (implementation guides), 'rule' (coding/project rules), 'project' (project overviews)",
+                    description: "Filter results by document types",
                   },
                   max_results: {
                     type: "number",
-                    description: "Maximum number of document chunks to return (default: 10, recommended range: 5-20)",
+                    description: "Maximum number of document chunks to return (default: 10)",
                     minimum: 1,
                     maximum: 50,
                   },
@@ -171,6 +250,139 @@ program
           const rag = await initializeRAG();
 
           switch (name) {
+            case "check_project_rules": {
+              const { project, max_results = 15 } = args as any;
+
+              const options: any = {
+                maxResults: max_results,
+                filterByType: ["rule"],
+              };
+
+              if (project) {
+                options.filterByProject = [project];
+              }
+
+              let query = "rules constraints requirements standards";
+              if (project) {
+                query += ` ${project}`;
+              }
+
+              const results = await rag.queryDocs(query, options);
+
+              const ruleReferences = results
+                .map((result: QueryResult) => result.metadata.title || result.metadata.filePath)
+                .filter((ref: string | undefined): ref is string => Boolean(ref));
+
+              return {
+                content: [
+                  {
+                    type: "text",
+                    text: JSON.stringify(
+                      {
+                        rules: results,
+                        rule_references: ruleReferences,
+                        summary: `Found ${results.length} project rules${project ? ` for ${project}` : ""}`,
+                      },
+                      null,
+                      2
+                    ),
+                  },
+                ],
+              };
+            }
+
+            case "check_guides": {
+              const { query, project, related_rules, max_results = 10 } = args as any;
+
+              if (!query) {
+                throw new McpError(ErrorCode.InvalidParams, "query is required");
+              }
+
+              const options: any = {
+                maxResults: max_results,
+                filterByType: ["guide"],
+              };
+
+              if (project) {
+                options.filterByProject = [project];
+              }
+
+              let enhancedQuery = query;
+              if (related_rules && related_rules.length > 0) {
+                enhancedQuery += ` ${related_rules.join(" ")}`;
+              }
+
+              const results = await rag.queryDocs(enhancedQuery, options);
+
+              const decisionReferences = results.reduce((refs: string[], result: QueryResult) => {
+                const content = result.document.toLowerCase();
+                const adrMatches = content.match(/adr[-_]?\d+/g) || [];
+                const rfcMatches = content.match(/rfc[-_]?\d+/g) || [];
+                return refs.concat(adrMatches, rfcMatches);
+              }, [] as string[]);
+
+              return {
+                content: [
+                  {
+                    type: "text",
+                    text: JSON.stringify(
+                      {
+                        guides: results,
+                        decision_references: [...new Set(decisionReferences)],
+                        summary: `Found ${results.length} implementation guides for "${query}"${
+                          project ? ` in ${project}` : ""
+                        }`,
+                      },
+                      null,
+                      2
+                    ),
+                  },
+                ],
+              };
+            }
+
+            case "search_decisions": {
+              const { query, references, project, max_results = 8 } = args as any;
+
+              if (!query) {
+                throw new McpError(ErrorCode.InvalidParams, "query is required");
+              }
+
+              const options: any = {
+                maxResults: max_results,
+                filterByType: ["adr", "rfc"],
+              };
+
+              if (project) {
+                options.filterByProject = [project];
+              }
+
+              let enhancedQuery = query;
+              if (references && references.length > 0) {
+                enhancedQuery += ` ${references.join(" ")}`;
+              }
+
+              const results = await rag.queryDocs(enhancedQuery, options);
+
+              return {
+                content: [
+                  {
+                    type: "text",
+                    text: JSON.stringify(
+                      {
+                        decisions: results,
+                        summary: `Found ${results.length} architectural decisions for "${query}"${
+                          references ? ` (refs: ${references.join(", ")})` : ""
+                        }`,
+                      },
+                      null,
+                      2
+                    ),
+                  },
+                ],
+              };
+            }
+
             case "search_documentation": {
               const { query, project, type_filter, max_results = 10 } = args as any;
 
@@ -193,7 +405,16 @@ program
                 content: [
                   {
                     type: "text",
-                    text: JSON.stringify(results, null, 2),
+                    text: JSON.stringify(
+                      {
+                        documents: results,
+                        summary: `Found ${results.length} documents for "${query}"${
+                          type_filter ? ` (types: ${type_filter.join(", ")})` : ""
+                        }`,
+                      },
+                      null,
+                      2
+                    ),
                   },
                 ],
               };
@@ -246,7 +467,8 @@ program
               });
               await server.connect(sseTransport);
             } else if (url === "/messages" && req.method === "POST") {
-              const sessionId = new URL(req.url || "", `http://${req.headers.host}`).searchParams.get("sessionId") ?? "";
+              const sessionId =
+                new URL(req.url || "", `http://${req.headers.host}`).searchParams.get("sessionId") ?? "";
 
               if (!sessionId) {
                 res.writeHead(400);

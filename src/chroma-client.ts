@@ -35,7 +35,6 @@ export class ChromaClient {
       });
       console.log(`Created new collection: ${collectionName}`);
 
-      // If docsPath is provided, process and add documents
       if (docsPath) {
         console.log(`Processing documents from: ${docsPath}`);
         const processor = new DocumentProcessor();

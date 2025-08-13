@@ -36,17 +36,23 @@ export class QueryInterface {
   ): Promise<QueryResult[]> {
     const { maxResults = 5, filterByType, filterByProject } = options;
 
-    const filters: Record<string, any> = {};
+    let whereClause: Record<string, any> | undefined = undefined;
+
+    const conditions: Record<string, any>[] = [];
 
     if (filterByType && filterByType.length > 0) {
-      filters.type = { $in: filterByType };
+      conditions.push({ type: { $in: filterByType } });
     }
 
     if (filterByProject && filterByProject.length > 0) {
-      filters.projects = { $in: filterByProject };
+      conditions.push({ projects: { $in: filterByProject } });
     }
 
-    const whereClause = Object.keys(filters).length > 0 ? filters : undefined;
+    if (conditions.length > 1) {
+      whereClause = { $or: conditions };
+    } else if (conditions.length === 1) {
+      whereClause = conditions[0];
+    }
     const results = await this.chromaClient.queryDocuments(query, maxResults, whereClause);
 
     return results.documents.map((doc, index) => ({
