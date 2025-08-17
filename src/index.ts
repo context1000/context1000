@@ -146,9 +146,9 @@ program
               },
             },
             {
-              name: "check_guides",
+              name: "search_guides",
               description:
-                "Check implementation guides and best practices. Should be called AFTER check_project_rules when specific implementation guidance is needed. Returns step-by-step guides, patterns, and examples.",
+                "Search implementation guides and best practices based on project rules and decision context. Called AFTER check_project_rules when specific implementation guidance is needed. Finds step-by-step guides, patterns, examples, and references to architectural decisions (ADRs/RFCs) that inform implementation approaches.",
               inputSchema: {
                 type: "object",
                 properties: {
@@ -291,7 +291,7 @@ program
               };
             }
 
-            case "check_guides": {
+            case "search_guides": {
               const { query, project, related_rules, max_results = 10 } = args as any;
 
               if (!query) {
