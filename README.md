@@ -1,24 +1,26 @@
 # context1000
 
-## Prepare and index your documentation
+**context1000** is a documentation format for software systems, designed for integration with
+artificial intelligence tools. The key artifacts are ADRs and RFCs, enriched with formalized links between documents.
 
-### Create documentation
+This project demonstrates an implementation of a context portal and consists of two parts:
 
-Use special docs template from: <https://github.com/context1000/docs>.
+1. Documentation format (<a href="https://github.com/context1000/docs" target="_blank">@context1000/docs</a>)
+2. <a href="https://github.com/context1000/context1000" target="_blank">Simple RAG</a> (Retrieval Augmented Generation) for this format with the ability to run locally.
 
-```bash
-git clone https://github.com/context1000/docs my-cool-docs
-```
+## Getting started
 
-on your local machine in /path/to/my-cool-docs create documentation for your projects in `docs` directory. (see README <https://github.com/context1000/docs>)
+### Install
 
-### Install context1000
+Install context1000 package globally:
 
 ```bash
 npm i context1000 -g
 ```
 
 ### Set up environment
+
+In the project where you use agents, create a `.env` file in the root directory of the project.
 
 ```bash
 touch .env
@@ -32,9 +34,13 @@ echo "OPENAI_API_KEY=your-key" >> .env
 docker run -p 8000:8000 chromadb/chroma
 ```
 
+### Prepare documentation
+
+Start with special docs template: <https://github.com/context1000/templates>. Or grab a raw template from <https://github.com/context1000/docs>.
+
 ### Index your documentation
 
-Use special docs template from: <https://github.com/context1000/docs>.
+It will be vectorized and stored documentation content in ChromaDB.
 
 ```bash
 npx context1000 index /path/to/docs
