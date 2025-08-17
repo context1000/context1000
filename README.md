@@ -94,3 +94,9 @@ claude mcp add --transport sse context1000 http://localhost:3001/sse
 claude mcp add --transport http context1000 https://myhost:3000/mcp
 claude mcp add --transport sse context1000 https://myhost:3000/sse
 ```
+
+## More information
+
+- [context1000 documentation format](https://github.com/context1000/docs)
+- [Ready to use templates (docusarus, mintlify) with context1000 structure](https://github.com/context1000/templates)
+- [Blog post about context1000](https://www.ivklgn.blog/posts/context1000-architectural-artifacts-for-ai/)
